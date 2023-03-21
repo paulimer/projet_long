@@ -43,3 +43,48 @@ The field is very limited to human and mice!!
 *** Museum : online details
 
 **** Cell type deconvolution
+
+** Benchmarking distribution prediction and cell type deconvolution Nat Met
+Il y a deux choses : prédire la distribution spatiale des transcrits non détéctés, et prédire le type de cellules présentes aux spots de Visium.
+Pour la partie simulation ce sont les simus de Stereoscope et RCTD qui sont utilisées -> ya moyen que ce soit un peu biaisé quand même.
+
+*** Spatial distribution of RNA transcripts
+Tangram performs the best for this task, followed by gimVI, and further Seurat and SpaGE, but for another marker it is SppaGE and Seurat then SpaOTsc, gimVI, Tangram, LIGER.
+En prenant un dataset en seqFISH+ et Smartseq, on voit que Tangram, SpaGE, gimVi ressortent positivement.
+Sur tous les jeux de données, Tangram ressort loin devant, gimVI est pas mal et spaGE ça va encore.
+
+Normalisation ou pas :
+Raw st Raw sc = R-R
+Norm st Raw sc = N-R
+Raw st Norm sc = R-N
+Norm st Norm sc = N-N
+R-N et R-R semble meilleur que les deux autres. Donc faut pas normaliser la spatiale? C'est pourtant le défaut de Seurat jcrois. RR semble mieux sur la plupart des outils mais équivalent sur les meilleurs. Enfin ça c'est pour le seq based, celui qui nous intéresse.
+
+Résistence à la sparsity ; encore Tangram, gimVI, spaGE.
+
+*** Cell-type deconvolution
+Performance comparée via un dataset (10) qui a une résolution spatiale supérieur, ce qui permet ensuite de le downsampler spatialement. On y voit une bonne perf de RCTD et Stereoscope, ensuite Tangram, Cell2location, STRIDE, SPOTlight, Seurat... Si onprend tous les types cellulaires du dataset : RCTD et Stereoscope gagnent (vive Poisson et le NB?).
+Autre dataset, avec assez peu de cellules (524, 14 types), en seqFISH+, on voit d'abord spatialDWLS, Tangram puis RCTD et CEell2location et Stereoscope. Les deux derniers sont cette fois un peu moins bons.
+Sur les données simulées, in fine c'est Cell2location, spatialDWLS, RCTD et STRIDE qui ressortent.
+
+*** Ressources computationnelles
+
+**** spatial distribution
+144 CPU cores ça va arrête de te la péter. ils ont une K80, qui en compute score est à 3.7 contre 8.6 pour ma 3070. Tangram a besoin de moins de 32 GB de mémoire. Tant mieux j'ai pas plus. Seurat pèse le moins lourd en général. gimVI et Tangram peuvent utiliser un GPU.
+
+**** Cell-type deconvolution
+Cell2location rale sur la K80, Seurat et Tangram mangent moins de 30 minutes, Stereoscope et Tangram mangent moins de 8GB de mémoire. Tangram et Seurat sont les plus efficient en général.
+RCTD c'est 71 GB de RAM??????
+
+*** Discussion
+Pour eux, en distribution spatiale des transcrits, on trouve
+1. Tangram
+2. gimVI
+3. spaGE
+Et pour la cell-type deconvo,
+1. Cell2location
+2. spatialDWLS
+3. RCTD
+
+
+Bon il reste à tester cytoSPACE.
