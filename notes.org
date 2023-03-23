@@ -147,3 +147,26 @@ Donc d'après tout ça, la liste qui me paraît pertinente c'est
 - CytoSPACE (il est trop récent et il a pas été testé)
 Et stereoscope dans tout ça? Il n'est pas recommandé par Nature methods, où il apparaît correct mais pas incroyable, mais surtout il prend un temps fou même en GPU. En revanche il est fortement recommandé par Briefings (mais sans qu'ils mentionnent le second point).
 
+* Papers outils
+
+** SpatialDWLS
+A l'air assez dépendant de Giotto, la suite d'outils des auteurs.
+Selon le bench, pas le plus long, prend moins de 32GB de RAM donc possible à utiliser pour moi.
+Selon l'article,  chaque spot a entre 5 à 10 cellules.
+Méthode : dampened weighted least squares, suite d'un outil pour déconvoluer du bulk. Weighted least squares, où les poids sont sélectionnés pour minimiser l'overall relative error rate. Deux étapes :
+1. identifies cell types likely to be present at each location (cell type enrichment analysis)
+2. cell type composition at each location is inferred. (modified DWLS method)
+Évaluation : données seqFISH+ 10k genes sur 523 cellules, aggregé en 71 spots.
+Résultats : Assez peu de différences avec MuSiC et RCTD, plus grands avec Spotlight et Stereoscope
+Input : spot coordinates + expression visium + signature genes for cell types.
+
+*** Un peu plus sur la méthode
+Ils commencent par utiliser la Parametric Analysis of Gene Set Enrichment, les gènes  marqueurs peuvent être identifiés par DGEA dans leur suite Giotto basé sur les données scRNAseq. Sinon on peut choisir ses propres marqueurs. Ils utilisent le top 100 des gènes DEG comme marqueurs.
+
+**** Cell type enrichment analysis
+Calcul de l'enrichissement des gènes marqueurs dans le spot versus tous les spots. Cut-off à 2 pour déterminer les cellules présentes (ouah c'est grossier).
+
+**** Cell type composition
+DWLS rentre en scene. Il y a des poids, un facteur de dampening déterminé par cross validation. Ces facteurs sont partagés dans des clusters (hein? ah c'est fait par Giotto). Finalement un thresholding sur le nombre de cellules par spot, une fréquence minimale dans un spot à 0.02.
+
+** Cell2location
