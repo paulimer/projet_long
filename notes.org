@@ -1,5 +1,5 @@
 #+title: Notes Projet Long
-* Papers
+* Papers generaux
 ** Museum
 Histoire et détail du domaine - depuis 1987.
 en général on identifie le smFISH (single molecule) comme le début, fin 90s. Ici on recule en 1987. Se base sur la littérature et une base de données créée pour l'occasion.
@@ -88,3 +88,62 @@ Et pour la cell-type deconvo,
 
 
 Bon il reste à tester cytoSPACE.
+
+** A comprehensive comparison on cell-type composition inference for spatial transcriptomics data
+*** Intro et outils
+/"myriads of aspects that were not possible without ST technologies, including identification of genes whose expressions exhibit spatial patterns, revelation of cellular subpopulations in their native spatial context, exploration of biologically relevant spatial domains, and interrogation of cell–cell communications"/ -> intéressant pour l'introduction.
+Ils expliquent comment ça marche, comment les outils se rapportent les uns aux autres, en plus des benchs sur des données issues de seqFISH probablement. Focalisé sur les methodes de cell type deconvov qui sortent des proportions cellulaires en sortie, donc pas Seurat.
+Trois groupes de méthodes :
+1. Probabilistic methods : Adroit, cell2location, DestVI, RCTD, STdeconvolve, stereoscope
+2. Negative matrix factorization & non-negative least squares : spatialDWLS, SPOTlight
+3. Others : Tangram, DSTG
+Il manque donc STRIDE (dommage je l'aimais bien) et évidemment cytoSPACE.
+Il manque une évaluation du temps que prennent les méthodes aussi mais bon on a ça dans le Nature Methods.
+- *Adroit* est fait pour le bulk. Sélection de gènes informatifs, modélisation de leur distrib (NB distrib), estimation of cross-sample variability colinearity of expression profiles and cell type specificity estimé depuis données ST, enfin les scaling factors estimés en modélisant sc et st (corriger pour des biais de plateforme). Puis modèle régularisé pour les prop cellulaires
+- *Cell2location* : Bayesian hierarchical framework. SC as reference for cell type specific signatures. Spatial expression count matrix = NB distrib; mean parameter depends on reference cell-type sign, overdispersion parameter = exp gamma compound prior that makes all genes have low dispersion. Mean parameter includes tech bias + gene and loc specific shifts, individually modelled as separate hierarchical gamma prior. (Mais tous les NB c'est de toute façon gamma + poisson en hierarchical donc rien de fou. Juste il sépare.). Partage l'info sur les spots. Variational Bayesian inference pour avoir la distrib postérieure.
+- *DestVI* : la variation à l'intérieur des cellules est modélisée par des variables latentes continues. Les types cellulaires ne sont pas discrets. Variational inference with decoder neural networks. Toujours la supposition de distrib NB. Entraînement sur SC, employé sur ST. Maximum-a-posteriori inference scheme.
+- *RCTD* : Conçu initialement pour le Slide-seq. Poisson log-normal mixture (hierarchical?), pas NB. Le paramètre moyenne de la partie log-normal est estimé avec les moyenne spécific des types cellulaires +  random effect term pour tenir compte des platform effects. Comme spatialDWLS il y a une sélection des gènes DE entre type cellulaires. Puis comme stereoscope on retrouve un MLE pour l'estimation (mais quel algo?).
+- *STdeconvolve* : reference-free, unsupervized. Ah comme STRIDE on est sur du LDA. On peut utiliser du sc quand même.
+- *Stereoscope* : blablabla NB. Gene specific coefficient partagé entre les spots st. Manière de corriger pour les biais de plateforme entre ST et SC. Noise term as dummy cell type to account for data asymmetry when cell types in the reference do not match those in the ST data. MLE pour avoir les parametres dans la distrib du SC, et MAP pour la mixture de type cellulaire dans les données ST.
+- *SpatialDWLS* : cf les notes sur le papier. Les deux étapes, PAGE puis DWLS
+- *SPOTlight* : utilise NMF ET NNLS. NMF sert àdéterminer les cell type-specific topic profiles dans le SC, NNLS les spot specific profiles qui donne les résultats. Prédiction aussi de la qualité de la composition.
+- *DSTG* : similarity-based semi-supervised graph convolutional network (GCN). Sur les données SC, il fait du pseudo ST (voilà une bonne idée!), puis avec ce pseudo ST et le vrai ST, il apprend un link graph pour trouver les mutual nearest neighbors via la canonical correclation analysis, et trouve qui sont les spots similaires. Enfin, un GCN est appris sur ce graph, qui permet de prédire les prop dans les données ST.
+- *Tangram* : full machine learning. Fonction loss custom pour apprendre un mapping qui align les donées SC sur les donnée SC. On a donc une fonction qui relie les deux, et qu'on doit optimiser pour bien faire un match.
+*** Data & évaluation
+pas de données simulées ici du tout.
+Comme d'hab du seqFISH avec des pseudo spots sur lesquels on a le ground truth. Pour les données spot based, on se base sur ce qu'on connaît de la bio pour savoir ce qu'on attend.
+**** Mouse olfactory bulb
+c'est du seqFISH+ poolé donc. Les données mises en commun comme référence pour faire du pseudo SC. Puis ensuite changement de référence pour une externe, ce qui est plus probable.
+*Internal reference* : /"Using the internal reference, Adroit, cell2location, RCTD, DSTG and Tangram show low RMSE in their inferred results"/.
+*External reference* : /"Among the best performers when using the internal reference, four remain among the top: Adroit, cell2location, RCTD and stereoscope"/ En revanche Tangram se casse plus la gueule.
+Liste plus resserrée  avec les deux méthodes : cell2location, RCTD, stereoscope.
+Sur le choix de gènes pour les méthodes : /"In addition, when using external reference, most methods perform better with top cell-type marker genes than with HVG gene subsets, and most achieve the best performance with the default gene subset"/.
+**** Developping human heart
+on a du SC, du ST spot, et du ST ISS qui est au niveau sub cellulaire, mais sur 69 (nice) genes. Internal reference = ISS cells.
+*Internal reference* : /"Adroit, RCTD, stereoscope, DSTG and Tangram show superior performance, similar to our observations in the MOB data, but here with a much smaller number of genes"/. Cell2location est moins bon, peut-être lié au faible nombre de gènes.
+*External reference* : Cell2location bouge pas (voire s'améliore, donc est 3e en RMSE et meilleur en distance correlation), tandis que les meilleurs sont Stereoscope et RCTD.
+***** Missing data
+S'il manque des cell type dans la référence, Adroit, RCTD et stereoscope se débrouille plus logiquement que cell2location. C'est à dire qu'il filent toutes les cellules manquantes à un seul type cellulaire proche, tandis que le second les réparti dans plus de types cellulaires.
+***** Données spot uniquement
+/"Among them, stereoscope, cell2location and RCTD exhibit higher agreement with ISS cell composition"/
+**** primary somatosensory cortex
+Comme dev heart, sauf qu'ici il y a du osmFISH (33 genes) pour le single cell ST, et du Visium et Slide-seqV2 pour le spot level ST. C'est mieux que pour le Developping human heart qui est dans la vieille plateforme de 10X.
+***** pseudo ST with ground truth
+*Internal reference* : /"Adroit, RCTD, stereoscope, DSTG and Tangram again prove best performers"/
+*External reference* : /"Tangram and DSTG produce the lowest/best RMSE"/
+***** Visium and Slide-seq2
+/"Adroit, cell2location, DestVI, RCTD, stereoscope and SPOTlight all show patterns of major cell types consistent with those revealed from the osmFISH"/ Tangram est moins bon, peut-être parce que les données ST et SC sont plus éloignées. Tangram est moins robuste?
+*** Conclusion
+Les auteurs préfèrent RCTD et stereoscope, cell2location (/"Cell2location shows comparable performance when the gene number is sufficient (e.g. >100)"/) est 3e. Moi j'aime pas stereoscope.
+/"In addition, while out of the scope of this work, denoising and dimension reduction of noisy and high dimensional ST data can allow more effective information extraction"/ =mario_non.mp4=. Enfin pas selon l'autre benchmark, vaut mieu pas normaliser.
+
+NVIDIA GeForce RTX 3070 GPU lol
+** Conclusion des deux benchmarks
+Après avoir lu deux benchmarks (nature methods et briefing in bioinformatics), je trouve que RCTD et cell2location semblent ressortir positivement. Selon celui de Nature methods, je peux pas vraiment tester RCTD à cause de la RAM demandée, mais j'essaierai quand même. SpatialDWLS ne ressort que sur le bench nature methods, mais dans celui de briefings ils ont eu un bug (qui ne devrait pas arriver dans la vraie vie c'est une truc de benchmark) qui l'empêche de le tester correctement.
+Donc d'après tout ça, la liste qui me paraît pertinente c'est
+- cell2location (1er sur Nature meth, 3e sur Briegings)
+- RCTD (3e sur Nature meth, 2 sur Briefings) - (mais il me manque de la RAM peut-être)
+- SpatialDWLS (2e sur Nature meth, forfait sur briefings)
+- CytoSPACE (il est trop récent et il a pas été testé)
+Et stereoscope dans tout ça? Il n'est pas recommandé par Nature methods, où il apparaît correct mais pas incroyable, mais surtout il prend un temps fou même en GPU. En revanche il est fortement recommandé par Briefings (mais sans qu'ils mentionnent le second point).
+
