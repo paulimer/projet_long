@@ -170,3 +170,16 @@ Calcul de l'enrichissement des gènes marqueurs dans le spot versus tous les spo
 DWLS rentre en scene. Il y a des poids, un facteur de dampening déterminé par cross validation. Ces facteurs sont partagés dans des clusters (hein? ah c'est fait par Giotto). Finalement un thresholding sur le nombre de cellules par spot, une fréquence minimale dans un spot à 0.02.
 
 ** Cell2location
+Principled Bayesian model.
+Steps :
+1. Estimate reference cell type signatures from single cell profiles <=> gene expression profiles for a set of user provided cell types. Negative binomial regression.
+2. Use these references  + ST dataset(s) to decompose mRNA counts into cell types.
+Accounts for batch across slides and mRNA detection sensitivity. Efficient because of variational approximate inference and GPU acceleration.
+scvi-tools framework integration, il y a des outils downstream.
+Tests & données:
+- sur des données simulées. Ils sont meilleurs que les comparaisons.
+- sur le mouse brain (yen a 2, resp 2 et 3 sections), sn + Visium. Référence = sn poolé entre les individus, classique + Louvain clustering. Grosse réplicabilité entre section et entre animal.
+  Test particulier : scRNA-seq + large, avec des types cellulaires qui sont pas dans les coupes. Cell2location en mappe moins de celles-ci (mais mappe moins au total?).
+  Étude d'un sous type de cellule et validation par smFISH sur des marqueurs identifiés.
+- Human lymph node cellular compartments. Données de 10x. Ok
+- Fine immune cell types : plus précis que les autres. Ils l'accordent à leur capacité à partager l'info avec les locations similaires.
