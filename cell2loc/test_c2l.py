@@ -44,6 +44,9 @@ adata_vis = adata_vis[:, ~adata_vis.var['MT_gene'].values]
 adata_ref = sc.read_csv("/home/paulet/data/sc_mousebrain_allen/sc_allen/subsampled_cells_wo_index_w_ensembl.csv", first_column_names=True)
 ref_metadata = pd.read_csv("/home/paulet/data/sc_mousebrain_allen/sc_allen/metadata.csv")
 neigh_data = ref_metadata.filter(["sample_name", "neighborhood_label"])
+subs_cells = pd.read_csv("/home/paulet/data/sc_mousebrain_allen/sc_allen/subsampled_cells_wo_index_w_ensembl.csv").iloc[:, 0]
+subs_neigh_data = neigh_data[neigh_data["sample_name"].isin(subs_cells)]
+adata_ref.obs["cell_neigh"] = pd.Categorical(subs_neigh_data["neighborhood_label"])
 
 
 from cell2location.utils.filtering import filter_genes
