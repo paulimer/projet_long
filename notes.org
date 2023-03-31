@@ -1,4 +1,9 @@
 #+title: Notes Projet Long
+
+* todo liste
+
+** TODO préparer des données sc qui sont bien stratifiées et d'un seul individu
+
 * Papers generaux
 ** Museum
 Histoire et détail du domaine - depuis 1987.
@@ -183,3 +188,8 @@ Tests & données:
   Étude d'un sous type de cellule et validation par smFISH sur des marqueurs identifiés.
 - Human lymph node cellular compartments. Données de 10x. Ok
 - Fine immune cell types : plus précis que les autres. Ils l'accordent à leur capacité à partager l'info avec les locations similaires.
+
+*** Essai :
+Pas trop dur à utiliser in fine.  Il faut préciser combien de cellules on attend par spot (5 pour du Visium par défaut). Et un autre paramètre, le detection alpha. /"To improve accuracy & sensitivity on datasets with large technical variability in RNA detection sensitivity within the slide/batch - you need to relax regularisation of per-location normalisation"/.À une valeur de 20. Mais dans leur papier ils utilisaient 200...
+Pour 30 000 époques, j'ai environ 40 minutes de run.
+Attention : il y a un bug avec SpaceRanger on dirait : https://github.com/scverse/scanpy/issues/2391 J'ai tenté la modif mais je dois tout refaire tourner : à voir plus tard.
