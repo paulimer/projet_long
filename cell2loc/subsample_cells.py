@@ -29,3 +29,21 @@ for csv in part_csvs:
     print("done del")
 
 cells_df.to_csv("/home/paulet/data/sc_mousebrain_allen/sc_allen/subsampled_cells.csv", index=False)
+
+
+# Group by individuals
+
+gb_donor = cells_metadata.groupby(["external_donor_name_label"])
+indiv_norm = gb_donor.get_group(407906)
+indiv_norm_names = list(indiv_norm["sample_name"])
+
+part_csvs = ["/home/paulet/data/sc_mousebrain_allen/sc_allen/" + d for d in os.listdir("/home/paulet/data/sc_mousebrain_allen/sc_allen/", ) if d.startswith("gene_expression_matrix.00")]
+
+
+cells_indiv_df = pd.DataFrame()
+for csv in part_csvs:
+    tmp_df = pd.read_csv(csv)
+    cells_indiv_df = pd.concat([cells_indiv_df, tmp_df[tmp_df["sample_name"].isin(indiv_norm_names)]], axis=0)
+    del tmp_df
+
+cells_indiv_df.to_csv("/home/paulet/data/sc_mousebrain_allen/sc_allen/subsampled_cells_indiv.csv", index=False)

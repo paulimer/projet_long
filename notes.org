@@ -193,3 +193,38 @@ Tests & données:
 Pas trop dur à utiliser in fine.  Il faut préciser combien de cellules on attend par spot (5 pour du Visium par défaut). Et un autre paramètre, le detection alpha. /"To improve accuracy & sensitivity on datasets with large technical variability in RNA detection sensitivity within the slide/batch - you need to relax regularisation of per-location normalisation"/.À une valeur de 20. Mais dans leur papier ils utilisaient 200...
 Pour 30 000 époques, j'ai environ 40 minutes de run.
 Attention : il y a un bug avec SpaceRanger on dirait : https://github.com/scverse/scanpy/issues/2391 J'ai tenté la modif mais je dois tout refaire tourner : à voir plus tard.
+En fait c'était un problème avec le côté spatial de scanpy, en fait il vaut mieux utiliser squidpy pour cela, ça fonctionne aussi.
+
+**** Annotation simple
+Niveau résultats obtenus, j'ai essayé avec deux choses : 8k cellules, 1k de chaques neighborhood, ce qui donne in fine cette image :
+#+CAPTION: Assignation des types cellulaires si on utilise 8k cellules de l'atlas
+[[./cell2loc/first_image.png]]
+
+Mais on peut aussi utiliser une seule souris de l'atlas, qui en compte une 50aine. J'ai pris une souris au hasard, avec un nombre de cellule moyen+ : 20k. L'inférence paraît pas plus longue en tout cas, ce qui est logique puisque le jeu de données spatial ne change pas. Cette souris n'a pas un type cellulaire (DG/SUB/CA), donc il ne peut être découvert dans le jeu de données
+#+CAPTION: un seul individu, plus de cellules mais il manque un des cellules DG/SUB/CA dans celui-ci
+[[./cell2loc/first_image_one_indiv.png]]
+
+
+
+Franchement c'est pas mal reproductible, le type cellulaire manquant se retrouve lui dans un peu L2/3 et L4/5/6, peut-être aussi dans other. Il y a juste CGE qui est dans l'espèce de surcroissance, alors que cet espace est peuplé de rien du tout dans le cas 8k cellules. C'est assez étonnant qu'aucun type cellulaire n'y soit présent d'ailleurs, dans la première image. Peut-être une histoire d'échelle cependant, comme elle n'est pas identique pour chaque type celllulaire. J'imagine donc qu'elles sont dans other, ou divisées en 8 aussi comme les types cellulaires manquants.
+Afficher plusieurs types cellulaires dans la même cellule est faisable aussi.
+
+**** Downstream
+À voir plus tard
+
+** SpatialDWLS
+Initialement c'est une méthode de bulk.
+
+** RCTD
+De ce que j'ai compris, c'est stereoscope en plus simple (poisson plutôt que gamma-poisson). /"A pertinent challenge for supervised cell type learning is what we term platform effects, the effects of technology-dependent library preparation on the capture rate of individual genes between sequencing platforms"/. Ce qui est corrigé par RCTD. Platform = GEX vs Visium.
+1. /"RCTD first calculates the mean gene expression profile of each cell type within the annotated scRNA-seq reference"/
+2. /"RCTD creates a spatial map of cell types by fitting each spatial transcriptomics pixel as a linear combination of individual cell types"/
+3. /"RCTD estimates the proportion of each cell type for each pixel by fitting a statistical model where, for each pixel i and gene j, the observed gene counts Yi,j are assumed to be Poisson distributed"/. Le paramètre de "rate" est déterminé par le nombre de transcrits du spot, et par la compo de cellules $\lambda_{i, j}$. Celle ci est une variable aléatoire, composée de propcell*gene + un facteur spot + un facteur plateforme + un effet aléatoire d'overdispersion.
+4. Les $\beta_{i,j}$ sont estimés par MLE. Il y a un mode "doublet" s'il y a peu de types cellulaires par spot, comme avec le slide seq. Mais pas pour nous.
+
+
+Comment fitter pour tous ces paramètres? Il y a un $\lambda$ par gène, qui lui même possède un facteur de spot et un facteur de plateforme et un facteur aléatoire d'overdispersion.
+1. estimation of cell type profiles, mean gean expression for types
+2. Filtering for informative genes (DGE across types + minimum average expression), ~ 5000 gènes pour 3. puis réduits à 3000 gènes pour 4.
+3. Platform effect normalization, estimation de $\gamma_j$, en passant par du pseudo bulk.
+4. RCTD, on plugge les estimateurs de moyene et d'effet de plateforme (considérés comme fixes). MLE pour les $\beta_{i, j}$ $\alpha_i$ et $\sigma_{\epsilon}$

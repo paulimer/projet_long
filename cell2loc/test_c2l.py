@@ -179,8 +179,8 @@ with mpl.rc_context({'axes.facecolor':  'black',
     sq.pl.spatial_scatter(adata_vis, img_cmap='magma',
                   # show first 8 cell types
                   color=['CGE', 'DG/SUB/CA', 'L2/3 IT', 'L4/5/6 IT Car3', 'MGE', 'NP/CT/L6b', 'Other', 'PT'],
-                  ncols=4, size=1.3,
-                  img_key='hires')#,
+                  ncols=4, size=1.3)#,
+                  # img_key='hires')#,
                   # limit color scale at 99.2% quantile of cell abundance
                   # vmin=0, vmax='p99.2'
                  # )

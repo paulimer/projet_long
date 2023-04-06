@@ -13,7 +13,7 @@ correspondance_ensembl <- function(mgi, ref_df) {
   matched %>% pull("ensembl_gene_id")
 }
 
-subs_cells <- read_csv("/home/paulet/data/sc_mousebrain_allen/sc_allen/subsampled_cells_wo_index.csv")
+subs_cells <- read_csv("/home/paulet/data/sc_mousebrain_allen/sc_allen/subsampled_cells_indiv.csv")
 
 ensembl.database <- useEnsembl(biomart = "ensembl", dataset = "mmusculus_gene_ensembl", mirror = "useast")
 ensembl.attributes <- c('ensembl_gene_id', 'mgi_symbol')
@@ -22,4 +22,4 @@ subs_cell_to_write <- subs_cells %>% rename_with(correspondance_ensembl, .cols =
   dplyr::select(dplyr::starts_with("ENS"), sample_name) %>%
   dplyr::relocate(sample_name)
 
-write_csv(subs_cell_to_write, "/home/paulet/data/sc_mousebrain_allen/sc_allen/subsampled_cells_wo_index_w_ensembl.csv")
+write_csv(subs_cell_to_write, "/home/paulet/data/sc_mousebrain_allen/sc_allen/subsampled_cells_indiv_w_ensembl.csv")
