@@ -2,7 +2,13 @@
 
 * todo liste
 
-** TODO préparer des données sc qui sont bien stratifiées et d'un seul individu
+** DONE préparer des données sc qui sont bien stratifiées et d'un seul individu
+
+** Cell type majoritaire par spot cell2loc
+
+** charger données seurat pour essayer rctd comme ça
+
+** Cytospace ou GraphST
 
 * Papers generaux
 ** Museum
