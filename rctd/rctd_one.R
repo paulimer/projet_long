@@ -56,7 +56,6 @@ ref <- UpdateSeuratObject(ref)
 Idents(ref) <- "neighborhood_label"
 
 # extract information to pass to the RCTD Reference function
-counts <- ref[["RNA"]]$counts
 counts <- ref@assays$RNA@counts
 cluster <- as.factor(ref$neighborhood_label)
 names(cluster) <- colnames(ref)
@@ -71,7 +70,19 @@ coords[is.na(colnames(coords))] <- NULL
 query <- SpatialRNA(coords, counts_vis, colSums(counts_vis))
 
 RCTD <- create.RCTD(query, reference, max_cores = 16)
-RCTD <- run.RCTD(RCTD)
-saveRDS(RCTD, file = "rctd_obj.rds")
-visium <- AddMetaData(visium, metadata = RCTD@results$results_df)
-saveRDS(visium, file = "visium_w_rctd.rds")
+RCTD <- run.RCTD(RCTD, doublet_mode = "full")
+saveRDS(RCTD, file = "rctd_obj_full.rds")
+visium <- AddMetaData(visium, metadata = RCTD@results$weights)
+saveRDS(visium, file = "visium_w_rctd_full.rds")
+
+
+# Load exploit results
+rctd_res <- readRDS("./rctd_obj_full.rds")
+#continue here
+
+visium_w_rctd <- readRDS("./visium_w_rctd_full.rds")
+# change to plot all types? how?
+p1 <- SpatialDimPlot(visium_w_rctd, group.by = "first_type")
+p2 <- SpatialDimPlot(visium_w_rctd, group.by = "second_type")
+p1 | p2
+ggsave("rctd_first_second.png")
