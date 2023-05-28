@@ -1,10 +1,27 @@
 ---
-output: html_document
-bibliography: ./Projet_long.bib
+title: "Rapport sur la déconvolution single-cell"
+output:
+  html_document:
+    toc: true
+    fig_caption: true
+bibliography: "./Projet_long.bib"
 ---
 
-# Rapport sur la déconvolution single-cell
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,
+                      eval = TRUE,
+                      message = FALSE,
+                      warning = FALSE)
+```
+
+```{r libraries}
+library(ggplot2)
+library(readr)
+library(dplyr)
+library(janitor)
+library(tibble)
+```
 
 ## Introduction
 
@@ -12,17 +29,138 @@ La technologie Visium de 10x Genomics est une des deux technologies majeures pou
 
 Toutes les approches actuelles, basée sur la microscopie comme sur le NGS, résultent de compromis entre la largeur de détection (avec ou sans *a priori*), la résolution (qui peut aller jusqu'à la cellule unique), l'efficacité de détection et la surface du tissu (ces deux dernières étant généralement opposées), et enfin la facilité d'utilisation et la compatibilité avec certaines méthodes de conservation de tissus (toutes fonctionnent sur des tissus congelés, mais seule la technologie Visium peut utiliser le FFPE). La technologie Visium est aujourd'hui la plus employée [@moses_museum_2022]. Elle n'a pas d'a priori (ne fonctionne pas via un panel de gène pré-déterminé), ce qui se paye par un relativement faible nombre de gène détecté (efficacité de détection de 6 à 15%), ainsi qu'une résolution assez faible. En effet, la plaque sur laquelle est placé le tissu est divisée en spots de 55µm de rayon, ce qui excède nettement la taille moyenne d'une cellule. En fonction du tissu, il est généralement accepté qu'il y a entre 5 et 10 cellules par spot. Chaque spot de capture est cadrillé par des fragments d'ARN ancrés, qui possèdent entre autre une queue poly(dT), qui permet de capturer les ARNm polyA complémentaires, ainsi qu'un code unique par spot (spatial barcode). Après séquençage, il est donc possible de retrouver de quel spot provient quel read. L'information au niveau cellulaire n'est donc pas capturée.
 
-![./10xbarcode.png](La technologie Visium fonctionne grâce au spatial barcoding)
+![La technologie Visium fonctionne grâce au spatial barcoding](./10xbarcode.png)
 
 La déconvolution single-cell est une tentative de remédier à cette limitation de la résolution du Visium. Chaque spot peut en effet être considéré comme un mélange potentiellement hértérogène de transcriptomes provenant de différentes cellules, et le but de la déconvolution est donc de définir quelle somme pondérée de différent signaux (transcriptomes) permet d'aboutir au mélange constaté. La plupart des méthodes développées pour répondre à cette question se basent sur une référence, c'est à dire un jeu de donnée single-cell annoté (i.e. affectant des types cellulaires aux cellules d'un jeu de données single-cell) pour découvrir lesquels de ces types cellulaires contribuent à quels spots. C'est un champ de recherche extrêmement actif, avec un nombre très important de méthodes développées dans les dernières années, et de tentatives de les comparer et classer ( @li_benchmarking_2022 , @chen_comprehensive_2022 , @li_comprehensive_2023 ). De nombreuses approches méthodologiques ont été proposées, probabilistes fréquentistes (par Maximum Likelihood Estimation (MLE)) telles RCTD [@cable_robust_2022], bayésienne variationnelle telle que cell2location [@kleshchevnikov_cell2location_2022], bayésienne (par estimation du Maximum A Posteriori (MAP)) comme stereoscope [@andersson_single-cell_2020], une variation des moindres carrés (dampened weighted least squares) spatialDWLS [@dong_spatialdwls_2021], une approche Deep Learning nommée Tangram [@biancalani_deep_2021], une implémentation d'un *shortest augmenting path optimization algorithm* CytoSPACE [@vahid_high-resolution_2023], ou encore une approche auto-supervisée basée sur les *graph neural networks* GraphST [@long_spatially_2023]. Nous avons également identifié une méthode ne nécessitant pas de référence single-cell annotée, STDeconvolve, basée sur la Latent Dirichlet Allocation (fréquemment utilisée en *text mining*), STDeconvolve [@miller_reference-free_2022]. Cette liste de méthodes publiées dans les meilleurs journaux est non exaustive, mais elle montre que qu'il peut-être difficile, voire impossible, de distinguer une méthode supérieure aux autres dans tous les cas, sachant que même les dernières publiées ne se comparent pas à l'intégralité de leurs concurrents. En effet, pour par exemple Tangram et GraphST, la déconvolution single-cell n'est qu'une des possibilité offerte par l'outil, tandis que d'autres sont sorties au début de l'explosion du domaine, comme spatialDWLS et stereoscope. Les trois benchmarks précédemment cités peuvent servir de guide, mais ils souffrent également de quelques limitations : tout d'abord, en fonction de leur date de publication, ils ne comparent pas tous les outils du domaines. Mais plus important encore, il n'existe pas de *ground truth*, c'est à dire de jeu de données à la résolution cellulaire, sans *a priori* (sans panel de gène), et de la même surface de tissus. Les auteurs de ces articles utilisent donc deux types de jeux de données : des jeux de données sur un nombre réduit de cellule avec panel de gène, dont la résolution est réduite. Il s'agit alors pour les outils de déconvolution de retrouver quelles cellules ont été mélangées. Le second type consiste en des jeux de données simulés, mais sans certitude absolue quand à leur ressemblance à un jeu de données réels, ou sur le fait qu'ils puissent favoriser un outil par rapport à un autre.
 
 
-Yoann Martin est le spécialiste transcriptomique spatiale à la plateforme Genom'IC de l'Institut Cochin, et est également intégré à l'équipe d'Éric Pasmant travaillant sur la génétique et l'épigénétique des tumeurs rares. Dans le cadre d'un projet comportant une partie transcriptomique spatiale sur une tumeur rare, il a été amené à utiliser le module stereoscope [@andersson_single-cell_2020], dont l'évaluation dans ce cas particulier est encore en cours. S'il semble pour l'heure prometteur en terme de résultats, stereoscope l'est bien moins en terme de temps de calcul. En effet, sa dernière utilisation (sur CPU) a pris plus de deux semaines pour obtenir des résultats, avec il est vrai une référence conséquente (70k cellules). Ce projet consiste donc en l'évaluation sommaire de quelques unes des méthodes précédemment citées. Sommaire, car une évaluation complète rentrerait plutôt dans le cadre d'un article pour Nature que d'un projet long, et de seulement quelques unes de ces méthodes car toutes ne s'intègrent pas facilement dans le pipeline actuel de la plateforme, qui utilise Seurat, tandis que certains outils utilisent scanpy/squidpy. Ces deux super-packages définissent un workflow et des structures de données pour l'analyse single-cell et spatial transcriptomic, et il est difficile de maintenir les deux alternatives à la plateforme, outre qu'ils soient tout deux difficiles d'approche pour un débutant.
+Yoann Martin est le spécialiste transcriptomique spatiale à la plateforme Genom'IC de l'Institut Cochin, et est également intégré à l'équipe d'Éric Pasmant travaillant sur la génétique et l'épigénétique des tumeurs rares. Dans le cadre d'un projet comportant une partie transcriptomique spatiale sur une tumeur rare, il a été amené à utiliser le module stereoscope [@andersson_single-cell_2020], dont l'évaluation dans ce cas particulier est encore en cours. S'il semble pour l'heure prometteur en terme de résultats, stereoscope l'est bien moins en terme de temps de calcul. En effet, sa dernière utilisation (sur CPU) a pris plus de deux semaines pour obtenir des résultats, avec il est vrai une référence conséquente (70k cellules). Ce projet consiste donc en l'évaluation sommaire de quelques unes des méthodes précédemment citées. Sommaire, car une évaluation complète rentrerait plutôt dans le cadre d'un article pour Nature que d'un projet long, et de seulement quelques unes de ces méthodes car toutes ne s'intègrent pas facilement dans le pipeline actuel de la plateforme, qui utilise Seurat, tandis que certains outils utilisent scanpy/squidpy. Ces deux super-packages définissent un workflow et des structures de données pour l'analyse single-cell et spatial transcriptomic, et il est difficile de maintenir les deux alternatives à la plateforme, outre qu'ils soient tout deux difficiles d'approche pour un débutant. Enfin, les algorithmes et les jeux de données ciblés sont extrêmement lourds, mais étant donné le manque de GPU disponible sur la plateforme pour l'instant, j'ai utilisé mon PC personnel (i9-12900K, RTX 3070, 32GB RAM) pour les calculs, ce qui a constitué une limite certaine.
 
-Le but de ce projet est donc de défricher le champ de la déconvolution single-cell, afin de proposer une alternative à stereoscope qui soit plus efficace et plus précise. Dans le cadre du projet scientifique sur la glande surrénale, le temps trop important pris par stereoscope a pour effet d'empêcher l'itération rapide, et en particulier de pouvoir évaluer l'impact de l'évolution de l'annotation single-cell sur la déconvolution. Cette exploration a également pour but d'évaluer l'intérêt d'augmenter les ressources de la plateforme en calcul GPU : en effet nombre de ces outils (cell2location, tangram, stereoscope...) bénéficie de façon importante du fait d'effectuer leurs calculs sur GPU, et un choix pour l'une de ces méthodes aura un impact sur les décisions d'équipement futur.
+Le but de ce projet est donc de défricher le champ de la déconvolution single-cell, afin de proposer une alternative à stereoscope qui soit plus efficace et plus précise. Dans le cadre du projet scientifique sur la glande surrénale, le temps trop important pris par stereoscope a pour effet d'empêcher l'itération rapide, et en particulier de pouvoir évaluer l'impact de l'évolution de l'annotation du jeu de données single-cell sur la déconvolution. Cette exploration a également pour but d'évaluer l'intérêt d'augmenter les ressources de la plateforme en calcul GPU : en effet nombre de ces outils (cell2location, tangram, stereoscope...) bénéficie de façon importante du fait d'effectuer leurs calculs sur GPU, et un choix pour l'une de ces méthodes aura un impact sur les décisions d'équipement futur.
+
+<!-- Comment on a retenu les algos + lesquels ont été testés -->
+
+## Résultats
+
+### RCTD
 
 
-<!-- parler infra aussi -->
-## Glossaire
-FFPE : 
-MERFISH: 
+Sur nos jeux de données nous obtenons la représentation suivante :
+![Répartition des types cellulaires sur la coupe de tissu, RCTD](./rctd/rctd_full.png)
+
+Le temps de calcul est assez important, autour d'une demi-journée sur 16 threads, avec une forte occupation de la RAM. 
+
+Visuellement, on observe que les structures connues sont reproduites, en particulier la succession des types cellulaires L2/L3, puis L4/5/6, puis L6b en couches. Il semble également qu'un nombre important de cellules aient été classés dans la catégorie "Other", ainsi que dans la catégorie "PT", ce qui est confirmé dans la figure suivante. 
+
+```{r, fig.cap="Totaux des poids affectés à chaque type cellulaire, RCTD"}
+weights_rctd <- read.csv("./rctd/rctd_weights.csv", row.names = 1) 
+colSums(weights_rctd, na.rm = TRUE) %>%
+  as.data.frame() %>%
+  rownames_to_column("celltype") %>%
+  rename("total_weights" = ".") %>%
+  ggplot(aes(x = celltype, y = total_weights)) +
+  geom_bar(stat = "identity")
+
+```
+
+
+Étant donné que les types PT et Other ne rassemblent qu'autour de 2,5% du jeu de données de référence, ces assignations sont donc à prendre avec précaution. Il sera intéressant d'observer si elles sont répétées par les autres outils. La présence aussi importante du type neuronal glutamatergique PT est assez peu probable, au contraire du type "Other" : le jeu de données de référence est enrichi en neurones, ce qui n'est pas le cas de notre coupe de tissu, qui devrait donc comporter plus de types cellulaires non neuronaux représentés par le type "Other". Il semble que RCTD ait eu des difficultés à bien définir le type PT (Pyramidal Tract) et le séparer du type Other. Cela semble indiquer des difficultés de cette méthode à bien définir et déconvoluer des types cellulaires rares. 
+
+### Stereoscope
+
+Sur nos jeux de données, stereoscope esquisse la répartition suivante :
+
+![Répartition des types cellulaires sur la coupe de tissu, stereoscope](./stereoscope/stereo.png)
+Visuellement l'impression est similaire à RCTD, notamment pour la succession de couches L2/L3/IT puis L4/L5/L6IT/CAR3 puis NP/CT/L6B. Une différence majeure cependant avec RCTD est la présence du type "Other" dans beaucoup plus de spots, ce qui est fait au détriment du type cellulaire "PT". Les deux étaient faiblement décrits par notre jeu de données (cf Matériel et méthodes), une certaine volatilité est attendue. Il nous paraît cependant bien plus crédible que la classe "Other" soit plus représentée, car elle inclut tous les types cellulaires non-neuronaux, qui comme mentionné précédemment sont présents en plus grande quantité dans la coupe que dans le jeu de données de référence.
+
+
+```{r, fig.cap="Totaux des poids affectés à chaque type cellulaire, stereoscope"}
+stereo_w <- read_tsv("./stereoscope/results/st_stereo_rn/W.2023-05-08115234.822513.tsv") %>%
+  clean_names() %>%
+  column_to_rownames("x1")
+
+colSums(stereo_w, na.rm = TRUE) %>%
+  as.data.frame() %>%
+  rownames_to_column("celltype") %>%
+  rename("total_weights" = ".") %>%
+  ggplot(aes(x = celltype, y = total_weights)) +
+  geom_bar(stat = "identity")
+
+```
+
+### Cell2location
+Cell2location obtient la déconvolution suivante sur nos jeux de données : 
+![Répartition des types cellulaires sur la coupe de tissu, cell2location](./cell2loc/cell2loc.png)
+
+On observe une répartition des types cellulaires qui est très proche de celle de stereoscope, où l'on peut bien voir la succession des couches L2/L3 IT, L4/M5/L5 IT Car3 puis NP CT L6B. On note cependant que la seconde de ces couches est plus fine avec stereoscope que cell2location, et qu'en revanche un peu du bruit de fond (au centre de la coupe) de cette couche dans stereoscope semble avoir disparu dans cell2location. On note également une présence encore plus élevée du type "Other". Il est cependant difficile pour nous de distinguer laquelle de ces interprétations est la plus correcte, pour la première de ces différences tout du moins.
+
+On note cette forte différence entre cell2location et stereoscope de manière plus flagrante sur la figure suivante. C'est maintenant l'écrasante majorité des spots de la coupe qui sont peuplés de cellules "Other". Ceci n'a toutefois pas pertubé outre mesure la représentation précédente, où les structures attendues de neurones glutamatergiques ont bien été retrouvé. Sans information précise sur les proportions attendues, il est difficile de trancher quant à la plus probable des deux répartitions entre cell2location et stereoscope. On remarque que selon cell2location, 42% des cellules de la coupe sont des neurones, tandis que pour stereoscope près de 70% d'entre elles sont des neurones.
+
+Il est intéressant de noter que d'après le benchmark [@li_benchmarking_2022] on aurait pu attendre que les résultats soient inversés : en effet il y est mentionné que lorsqu'un type cellulaire est supprimé de la référence, cell2location a tendance à assigner les cellules qui y correspondent à tous les types cellulaires, tandis que stereoscope et RCTD les attribuent aux types cellulaires les plus proches. Ici en revanche, on observe que la répartition opérée par cell2location est bien plus tranchée que celle de stereoscope.
+
+```{r, fig.cap="Totaux des poids affectés à chaque type cellulaire, cell2location"}
+cell2loc <- read_csv("./cell2loc/results/cell2location_map/abundance_matrix.csv") %>%
+  column_to_rownames("sample_name")
+colnames(cell2loc) <- make_clean_names(substring(colnames(cell2loc), 24))
+# cell1loc <- t(apply(cell2loc, 1, function(x){x/sum(x)}))
+
+
+colSums(cell2loc, na.rm = TRUE) %>%
+  as.data.frame() %>%
+  rownames_to_column("celltype") %>%
+  rename("total_weights" = ".") %>%
+  ggplot(aes(x = celltype, y = total_weights)) +
+  geom_bar(stat = "identity")
+
+```
+
+
+
+### Mise en commun
+
+En l'absence de vérité absolue sur la composition de la coupe de tissu, il est difficile d'établir laquelle des méthodes est la plus proche de la réalité.
+
+
+## Matériel et méthodes
+
+Pour évaluer les algorithmes retenus, nous avons sélectionnés deux jeux de données. Le premier est un jeu de données single-cell de référence, annoté. Nous avons choisi le *Whole cortex & hippocamus - 10X* murin du Allen Institute for Brain Science et sa taxonomie [@yao_taxonomy_2021]. Le second, un jeu de données Visium fourni par 10x disponible [ici](https://www.10xgenomics.com/resources/datasets/mouse-brain-serial-section-2-sagittal-anterior-1-standard), est une coupe de tissu congelé issu du cerveau d'une souris mâle adulte. Le jeu de données single-cell comporte 54 individus pour un total de plus de 1,1 million de cellules, et la sélection de ces cellules est réalisée de sorte à enrichir le jeu de donné final en neurones. Ce jeu de données, qui au format csv représente le double de la RAM disponible, a été ramené à un seul individu, comportant 20 581 cellules. Ceci est plus proche du fonctionnement normal des algorithmes testés et à l'utilisation qu'il en sera faite par l'équipe d'Éric Pasmant. Les catégories sont donc dépendantes de l'individu et ne sont pas présentes en proportions équivalente, ce qui est attendu.
+
+Ces catégories sont issues de l'article d'où proviennent les données single cell [@yao_taxonomy_2021], et sont consituées de 2 types de neurones GABAergic (MGE et CGE), 5 glutamatergiques (L2/3 IT, L4/5/6 IT Car3, PT, NP/CT/L6b, et DG/SUB/CA, ce dernier n'étant pas présent dans l'individu sélectionné), et une catégorie "Other". 
+
+![Taxonomie du cerveau cortex et de l'hippocampe murin](./classification_neuron.jpg)
+
+```{r, fig.cap="Distribution des types cellulaires dans la souris sélectionnée"}
+
+props <- read_delim("~/data/sc_mousebrain_allen/sc_allen/nb_tax.tsv", delim = " ")
+ggplot(props, aes(x = bio_celltype, y = count)) +
+  geom_bar(stat = "identity")
+```
+
+### RCTD
+RCTD (Robust Cell Type Deconvolution), un algorithme initialement conçu pour la technologie concurrente Slide-Seq, considère que la distribution des comptes en chaque spot suit un mélange Poisson log normal. C'est donc un algorithme probabiliste, dont l'estimation des paramètres repose sur la Maximum Likelihood Estimation. Fonctionne en plusieurs étapes, en commençant par estimer les profils des types cellulaires, calculant l'expression moyenne des gènes dans ceux-ci. Puis seuls les gènes informatifs sont filtrés, avant une étape de normalisation des biais entre les plateformes (entre le Visium et le single cell, dans notre cas). Enfin, une MLE est réalisée afin d'estimer les poids des types cellulaires dans la combinaison linéaires de ceux-ci à chaque spot. 
+
+Par défaut, RCTD considère qu'il ne peut y avoir que deux types cellulaires par spot ("doublet-mode"), ce qui est le plus probable en Slide-Seq. Ici nous utilisons le mode "full", qui donne un poids à chaque type cellulaire du jeu de données de référence.
+
+### Stereoscope
+
+Stereoscope est la méthode actuellement employée par mon encadrant. Bien classé par un des benchmarks consultés [@chen_comprehensive_2022], stereoscope utilise une distribution binomiale négative (gamma poisson) pour modéliser la distribution des comptes des gènes des spots et des cellules. C'est la modélisation classique en bulk RNA-Seq, qui contrairement à la distribution Poisson utilisée par RCTD notamment, rend compte de l'hétéroscédasticité de ce type de distribution (forte variance pour les faibles moyennes). L'estimation des paramètres (notamment la distribution des types cellulaires) est réalisée par Maximum A Posteriori. Les résultats sont une estimation de la proportion de chaque type cellulaire à chaque spot, ce qui est différent de RCTD en full mode, qui donne uniquement un score (qui ne somme pas à un). 
+
+Son défaut le plus important est le temps nécessaire à l'exécution, nous avons pu observer plus de deux semaines sur 8 cœurs et pour une jeu de données de référence de 70k cellules, sur GPU et 20k cellules cette durée est ramenée à près de 19h, ce qui est assez important. Stereoscope utilise torch pour l'optimisation, et permet donc de processer les données en batchs. Le nombre d'époques est très important par défaut (75 000) et la taille des batchs, single cell comme spatial, est très faible (100). Ceci a pour effet que la performance est assez peu affectée par le nombre de cœurs alloués à l'outil, qui ne semble pas vraiment les utiliser à 100%. Pour mes essais sur GPU, la taille des batchs a été augmentée à 5000, sans utiliser pour autant une forte quantité de VRAM (~1,2GB). 
+
+
+
+### Cell2location
+
+Cell2location est également une méthode probabiliste bayésienne, qui utilise l'inférence variationnelle bayésienne pour déconvoluer les types cellulaires présents dans les différents spots. À ce titre, cette méthode possède deux hyperparamètres (priors), le premier sur le nombre de cellules par spot attendu, avec une valeur par défaut de 5, ce qui correspond à la valeur attendue pour la technologie Visium, le second prior étant sur la variabilité de détection d'ARN par spot, par défaut à 20 (ce que nous avons également utilisé). La première partie de l'algorithme, pour déterminer la signature des différents types cellulaires, utilise une régression binomiale négative, comme stereoscope. La seconde partie utilise ces signatures pour décomposer les comptages de RNA dans chaque localisation en types du jeu de données de référence, en utilisant l'inférence variationnelle approximative. Il est à noter que comme la publication de cell2location est postérieure aux deux précédents outils cités, ses auteurs peuvent les comparer. Cette comparaison, qui montre une supériorité de cette méthode, est en accord avec les résultats du benchmark publié dans Nature Methods [@li_benchmarking_2022]. 
+
+<!-- whereas Monte Carlo techniques provide a numerical approximation to the exact posterior using a set of samples, variational Bayes provides a locally-optimal, exact analytical solution to an approximation of the posterior.Wikipedia  -->
+
+Grâce à son prior sur le nombre de cellule par spot, cell2location permet d'estimer l'abondance de chaque type cellulaire en plus de leur proportion. En outre, son utilisation de l'accélération GPU permet de raccourcir nettement les temps de calcul, et ainsi d'itérer très rapidement. En effet, pour 30 000 époques sur notre jeu de données, les résultats peuvent être obtenus en moins d'une heure, en utilisant autour de 4GB de VRAM.
+
+
+<!-- ###  -->
+
+
+<!-- ## Glossaire -->
+<!-- FFPE :  -->
+<!-- MERFISH:  -->

@@ -5,27 +5,11 @@ library(readr)
 library(tidyr)
 library(tibble)
 library(stringr)
-
-
-# Using rctd tutorial (does not work)
-ref_counts <- read_csv("~/data/sc_mousebrain_allen/sc_allen/subsampled_cells_indiv_w_ensembl.csv")
-metadata <- read_csv("/home/paulet/data/sc_mousebrain_allen/sc_allen/metadata.csv") %>%
-  select(sample_name, neighborhood_label) %>%
-  mutate(neighborhood_label = str_replace_all(neighborhood_label, "/", "_"))
-ref_counts <- left_join(ref_counts, metadata, by = "sample_name")
-metadata_list <- ref_counts$neighborhood_label
-names(metadata_list) <- ref_counts$sample_name
-metadata_list <- as.factor(metadata_list)
-ref_counts <- ref_counts %>% column_to_rownames("sample_name")
-
-reference <- Reference(ref_counts, metadata_list)
-
-# Using seurat tutorial
-
 library(Seurat)
 library(ggplot2)
 library(patchwork)
-library(dplyr)
+library(janitor)
+
 visium <- Load10X_Spatial("/home/paulet/data/sc_mousebrain_allen/st_mousebrain",
                           filename = "V1_Mouse_Brain_Sagittal_Anterior_Section_2_filtered_feature_bc_matrix.h5",
                           assay = "spatial",
@@ -76,13 +60,15 @@ visium <- AddMetaData(visium, metadata = RCTD@results$weights)
 saveRDS(visium, file = "visium_w_rctd_full.rds")
 
 
-# Load exploit results
-rctd_res <- readRDS("./rctd_obj_full.rds")
-#continue here
+# Load exploit results ------------------
+rctd_res <- readRDS("./rctd/rctd_obj_full.rds")
+weights_rctd <- rctd_res@results$weights %>% as.data.frame() %>% clean_names
+weights_rctd_per <- t(apply(weights_rctd, 1, function(x){x/sum(x)}))
 
-visium_w_rctd <- readRDS("./visium_w_rctd_full.rds")
+
+
+visium <- AddMetaData(visium, metadata = weights_rctd_per %>% as.data.frame())
+sp_plot <- SpatialFeaturePlot(visium, features = colnames(weights_rctd_per))
+
 # change to plot all types? how?
-p1 <- SpatialDimPlot(visium_w_rctd, group.by = "first_type")
-p2 <- SpatialDimPlot(visium_w_rctd, group.by = "second_type")
-p1 | p2
-ggsave("rctd_first_second.png")
+ggsave("rctd_full.png")
