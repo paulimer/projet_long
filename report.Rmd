@@ -38,7 +38,46 @@ Yoann Martin est le spécialiste transcriptomique spatiale à la plateforme Geno
 
 Le but de ce projet est donc de défricher le champ de la déconvolution single-cell, afin de proposer une alternative à stereoscope qui soit plus efficace et plus précise. Dans le cadre du projet scientifique sur la glande surrénale, le temps trop important pris par stereoscope a pour effet d'empêcher l'itération rapide, et en particulier de pouvoir évaluer l'impact de l'évolution de l'annotation du jeu de données single-cell sur la déconvolution. Cette exploration a également pour but d'évaluer l'intérêt d'augmenter les ressources de la plateforme en calcul GPU : en effet nombre de ces outils (cell2location, tangram, stereoscope...) bénéficie de façon importante du fait d'effectuer leurs calculs sur GPU, et un choix pour l'une de ces méthodes aura un impact sur les décisions d'équipement futur.
 
+
 <!-- Comment on a retenu les algos + lesquels ont été testés -->
+
+
+## Matériel et méthodes
+
+Pour évaluer les algorithmes retenus, nous avons sélectionnés deux jeux de données. Le premier est un jeu de données single-cell de référence, annoté. Nous avons choisi le *Whole cortex & hippocamus - 10X* murin du Allen Institute for Brain Science et sa taxonomie [@yao_taxonomy_2021]. Le second, un jeu de données Visium fourni par 10x disponible [ici](https://www.10xgenomics.com/resources/datasets/mouse-brain-serial-section-2-sagittal-anterior-1-standard), est une coupe de tissu congelé issu du cerveau d'une souris mâle adulte. Le jeu de données single-cell comporte 54 individus pour un total de plus de 1,1 million de cellules, et la sélection de ces cellules est réalisée de sorte à enrichir le jeu de donné final en neurones. Ce jeu de données, qui au format csv représente le double de la RAM disponible, a été ramené à un seul individu, comportant 20 581 cellules. Ceci est plus proche du fonctionnement normal des algorithmes testés et à l'utilisation qu'il en sera faite par l'équipe d'Éric Pasmant. Les catégories sont donc dépendantes de l'individu et ne sont pas présentes en proportions équivalente, ce qui est attendu.
+
+Ces catégories sont issues de l'article d'où proviennent les données single cell [@yao_taxonomy_2021], et sont consituées de 2 types de neurones GABAergic (MGE et CGE), 5 glutamatergiques (L2/3 IT, L4/5/6 IT Car3, PT, NP/CT/L6b, et DG/SUB/CA, ce dernier n'étant pas présent dans l'individu sélectionné), et une catégorie "Other". 
+
+![Taxonomie du cerveau cortex et de l'hippocampe murin](./classification_neuron.jpg)
+
+```{r, fig.cap="Distribution des types cellulaires dans la souris sélectionnée"}
+
+props <- read_delim("~/data/sc_mousebrain_allen/sc_allen/nb_tax.tsv", delim = " ")
+ggplot(props, aes(x = bio_celltype, y = count)) +
+  geom_bar(stat = "identity")
+```
+
+### RCTD
+RCTD (Robust Cell Type Deconvolution), un algorithme initialement conçu pour la technologie concurrente Slide-Seq, considère que la distribution des comptes en chaque spot suit un mélange Poisson log normal. C'est donc un algorithme probabiliste, dont l'estimation des paramètres repose sur la Maximum Likelihood Estimation. Fonctionne en plusieurs étapes, en commençant par estimer les profils des types cellulaires, calculant l'expression moyenne des gènes dans ceux-ci. Puis seuls les gènes informatifs sont filtrés, avant une étape de normalisation des biais entre les plateformes (entre le Visium et le single cell, dans notre cas). Enfin, une MLE est réalisée afin d'estimer les poids des types cellulaires dans la combinaison linéaires de ceux-ci à chaque spot. 
+
+Par défaut, RCTD considère qu'il ne peut y avoir que deux types cellulaires par spot ("doublet-mode"), ce qui est le plus probable en Slide-Seq. Ici nous utilisons le mode "full", qui donne un poids à chaque type cellulaire du jeu de données de référence.
+
+### Stereoscope
+
+Stereoscope est la méthode actuellement employée par mon encadrant. Bien classé par un des benchmarks consultés [@chen_comprehensive_2022], stereoscope utilise une distribution binomiale négative (gamma poisson) pour modéliser la distribution des comptes des gènes des spots et des cellules. C'est la modélisation classique en bulk RNA-Seq, qui contrairement à la distribution Poisson utilisée par RCTD notamment, rend compte de l'hétéroscédasticité de ce type de distribution (forte variance pour les faibles moyennes). L'estimation des paramètres (notamment la distribution des types cellulaires) est réalisée par Maximum A Posteriori. Les résultats sont une estimation de la proportion de chaque type cellulaire à chaque spot, ce qui est différent de RCTD en full mode, qui donne uniquement un score (qui ne somme pas à un). 
+
+Son défaut le plus important est le temps nécessaire à l'exécution, nous avons pu observer plus de deux semaines sur 8 cœurs et pour une jeu de données de référence de 70k cellules, sur GPU et 20k cellules cette durée est ramenée à près de 19h, ce qui est assez important. Stereoscope utilise torch pour l'optimisation, et permet donc de processer les données en batchs. Le nombre d'époques est très important par défaut (75 000) et la taille des batchs, single cell comme spatial, est très faible (100). Ceci a pour effet que la performance est assez peu affectée par le nombre de cœurs alloués à l'outil, qui ne semble pas vraiment les utiliser à 100%. Pour mes essais sur GPU, la taille des batchs a été augmentée à 5000, sans utiliser pour autant une forte quantité de VRAM (~1,2GB). 
+
+
+
+### Cell2location
+
+Cell2location est également une méthode probabiliste bayésienne, qui utilise l'inférence variationnelle bayésienne pour déconvoluer les types cellulaires présents dans les différents spots. À ce titre, cette méthode possède deux hyperparamètres (priors), le premier sur le nombre de cellules par spot attendu, avec une valeur par défaut de 5, ce qui correspond à la valeur attendue pour la technologie Visium, le second prior étant sur la variabilité de détection d'ARN par spot, par défaut à 20 (ce que nous avons également utilisé). La première partie de l'algorithme, pour déterminer la signature des différents types cellulaires, utilise une régression binomiale négative, comme stereoscope. La seconde partie utilise ces signatures pour décomposer les comptages de RNA dans chaque localisation en types du jeu de données de référence, en utilisant l'inférence variationnelle approximative. Il est à noter que comme la publication de cell2location est postérieure aux deux précédents outils cités, ses auteurs peuvent les comparer. Cette comparaison, qui montre une supériorité de cette méthode, est en accord avec les résultats du benchmark publié dans Nature Methods [@li_benchmarking_2022]. 
+
+<!-- whereas Monte Carlo techniques provide a numerical approximation to the exact posterior using a set of samples, variational Bayes provides a locally-optimal, exact analytical solution to an approximation of the posterior.Wikipedia  -->
+
+Grâce à son prior sur le nombre de cellule par spot, cell2location permet d'estimer l'abondance de chaque type cellulaire en plus de leur proportion. En outre, son utilisation de l'accélération GPU permet de raccourcir nettement les temps de calcul, et ainsi d'itérer très rapidement. En effet, pour 30 000 époques sur notre jeu de données, les résultats peuvent être obtenus en moins d'une heure, en utilisant autour de 4GB de VRAM.
+
 
 ## Résultats
 
@@ -96,7 +135,7 @@ On observe une répartition des types cellulaires qui est très proche de celle 
 
 On note cette forte différence entre cell2location et stereoscope de manière plus flagrante sur la figure suivante. C'est maintenant l'écrasante majorité des spots de la coupe qui sont peuplés de cellules "Other". Ceci n'a toutefois pas pertubé outre mesure la représentation précédente, où les structures attendues de neurones glutamatergiques ont bien été retrouvé. Sans information précise sur les proportions attendues, il est difficile de trancher quant à la plus probable des deux répartitions entre cell2location et stereoscope. On remarque que selon cell2location, 42% des cellules de la coupe sont des neurones, tandis que pour stereoscope près de 70% d'entre elles sont des neurones.
 
-Il est intéressant de noter que d'après le benchmark [@li_benchmarking_2022] on aurait pu attendre que les résultats soient inversés : en effet il y est mentionné que lorsqu'un type cellulaire est supprimé de la référence, cell2location a tendance à assigner les cellules qui y correspondent à tous les types cellulaires, tandis que stereoscope et RCTD les attribuent aux types cellulaires les plus proches. Ici en revanche, on observe que la répartition opérée par cell2location est bien plus tranchée que celle de stereoscope.
+Il est intéressant de noter que d'après le benchmark [@li_benchmarking_2022] on aurait pu attendre que les résultats soient inversés : en effet il y est mentionné que lorsqu'un type cellulaire est supprimé de la référence, cell2location a tendance à assigner les cellules qui y correspondent à tous les types cellulaires, tandis que stereoscope et RCTD les attribuent aux types cellulaires les plus proches. Ici en revanche, on observe que la répartition du type *"Other"* opérée par cell2location est bien plus tranchée que celle de stereoscope.
 
 ```{r, fig.cap="Totaux des poids affectés à chaque type cellulaire, cell2location"}
 cell2loc <- read_csv("./cell2loc/results/cell2location_map/abundance_matrix.csv") %>%
@@ -116,50 +155,48 @@ colSums(cell2loc, na.rm = TRUE) %>%
 
 
 
-### Mise en commun
+### Distance entre les méthodes
 
-En l'absence de vérité absolue sur la composition de la coupe de tissu, il est difficile d'établir laquelle des méthodes est la plus proche de la réalité.
+En l'absence de vérité absolue sur la composition de la coupe de tissu, il est difficile d'établir laquelle des méthodes est la plus proche de la réalité. Cependant, il est toujours possible de représenter quelles sont les distances entre les différentes assignations de type cellulaire : si l'on considère que chaque spot est décrit par un vecteur de taille 7 (comme les 7 types cellulaires présent) normalisé préalablement, il est alors possible de calculer une distance comme le RMSD et d'observer quelles sont les méthodes dont les assignations sont le plus proche.
 
+```{r}
+cell2loc_norm <- t(apply(cell2loc, 1, function(x){x/sum(x)}))
+stereo_w_norm <- t(apply(stereo_w, 1, function(x){x/sum(x)}))
+weights_rctd_norm <- t(apply(weights_rctd, 1, function(x){x/sum(x)}))
+list_df <- list("cell2location" = cell2loc_norm, "stereoscope" =  stereo_w_norm, "rctd" = weights_rctd_norm)
 
-## Matériel et méthodes
+rmsd <- function(df1, df2) {
+  mean(rowSums((df1 - df2)^2))^0.5
+}
 
-Pour évaluer les algorithmes retenus, nous avons sélectionnés deux jeux de données. Le premier est un jeu de données single-cell de référence, annoté. Nous avons choisi le *Whole cortex & hippocamus - 10X* murin du Allen Institute for Brain Science et sa taxonomie [@yao_taxonomy_2021]. Le second, un jeu de données Visium fourni par 10x disponible [ici](https://www.10xgenomics.com/resources/datasets/mouse-brain-serial-section-2-sagittal-anterior-1-standard), est une coupe de tissu congelé issu du cerveau d'une souris mâle adulte. Le jeu de données single-cell comporte 54 individus pour un total de plus de 1,1 million de cellules, et la sélection de ces cellules est réalisée de sorte à enrichir le jeu de donné final en neurones. Ce jeu de données, qui au format csv représente le double de la RAM disponible, a été ramené à un seul individu, comportant 20 581 cellules. Ceci est plus proche du fonctionnement normal des algorithmes testés et à l'utilisation qu'il en sera faite par l'équipe d'Éric Pasmant. Les catégories sont donc dépendantes de l'individu et ne sont pas présentes en proportions équivalente, ce qui est attendu.
+distance_mat <- matrix(0, nrow = length(list_df), ncol = length(list_df))
+colnames(distance_mat) <- names(list_df)
+rownames(distance_mat) <- names(list_df)
+for (row in seq_len(length(list_df))) {
+  for (column in seq_len(length(list_df))) {
+    distance_mat[row, column] <- rmsd(list_df[[row]], list_df[[column]])
+  }
+}
 
-Ces catégories sont issues de l'article d'où proviennent les données single cell [@yao_taxonomy_2021], et sont consituées de 2 types de neurones GABAergic (MGE et CGE), 5 glutamatergiques (L2/3 IT, L4/5/6 IT Car3, PT, NP/CT/L6b, et DG/SUB/CA, ce dernier n'étant pas présent dans l'individu sélectionné), et une catégorie "Other". 
-
-![Taxonomie du cerveau cortex et de l'hippocampe murin](./classification_neuron.jpg)
-
-```{r, fig.cap="Distribution des types cellulaires dans la souris sélectionnée"}
-
-props <- read_delim("~/data/sc_mousebrain_allen/sc_allen/nb_tax.tsv", delim = " ")
-ggplot(props, aes(x = bio_celltype, y = count)) +
-  geom_bar(stat = "identity")
 ```
 
-### RCTD
-RCTD (Robust Cell Type Deconvolution), un algorithme initialement conçu pour la technologie concurrente Slide-Seq, considère que la distribution des comptes en chaque spot suit un mélange Poisson log normal. C'est donc un algorithme probabiliste, dont l'estimation des paramètres repose sur la Maximum Likelihood Estimation. Fonctionne en plusieurs étapes, en commençant par estimer les profils des types cellulaires, calculant l'expression moyenne des gènes dans ceux-ci. Puis seuls les gènes informatifs sont filtrés, avant une étape de normalisation des biais entre les plateformes (entre le Visium et le single cell, dans notre cas). Enfin, une MLE est réalisée afin d'estimer les poids des types cellulaires dans la combinaison linéaires de ceux-ci à chaque spot. 
-
-Par défaut, RCTD considère qu'il ne peut y avoir que deux types cellulaires par spot ("doublet-mode"), ce qui est le plus probable en Slide-Seq. Ici nous utilisons le mode "full", qui donne un poids à chaque type cellulaire du jeu de données de référence.
-
-### Stereoscope
-
-Stereoscope est la méthode actuellement employée par mon encadrant. Bien classé par un des benchmarks consultés [@chen_comprehensive_2022], stereoscope utilise une distribution binomiale négative (gamma poisson) pour modéliser la distribution des comptes des gènes des spots et des cellules. C'est la modélisation classique en bulk RNA-Seq, qui contrairement à la distribution Poisson utilisée par RCTD notamment, rend compte de l'hétéroscédasticité de ce type de distribution (forte variance pour les faibles moyennes). L'estimation des paramètres (notamment la distribution des types cellulaires) est réalisée par Maximum A Posteriori. Les résultats sont une estimation de la proportion de chaque type cellulaire à chaque spot, ce qui est différent de RCTD en full mode, qui donne uniquement un score (qui ne somme pas à un). 
-
-Son défaut le plus important est le temps nécessaire à l'exécution, nous avons pu observer plus de deux semaines sur 8 cœurs et pour une jeu de données de référence de 70k cellules, sur GPU et 20k cellules cette durée est ramenée à près de 19h, ce qui est assez important. Stereoscope utilise torch pour l'optimisation, et permet donc de processer les données en batchs. Le nombre d'époques est très important par défaut (75 000) et la taille des batchs, single cell comme spatial, est très faible (100). Ceci a pour effet que la performance est assez peu affectée par le nombre de cœurs alloués à l'outil, qui ne semble pas vraiment les utiliser à 100%. Pour mes essais sur GPU, la taille des batchs a été augmentée à 5000, sans utiliser pour autant une forte quantité de VRAM (~1,2GB). 
+```{r, fig.cap="Distance entre les assignations des méthodes testées"}
+heatmap(distance_mat)
+```
+De manière relativement surprenante, nous observons que les deux méthodes qui obtiennent les résultats les plus similaires sont RCTD et stereoscope. Cell2location est plus éloigné. Pour le problème qui nous préoccupe, nous en déduisons que changer de méthode pour cell2location aurait un impact plus grand sur les résultats que pour RCTD. 
 
 
 
-### Cell2location
+## Discussion
 
-Cell2location est également une méthode probabiliste bayésienne, qui utilise l'inférence variationnelle bayésienne pour déconvoluer les types cellulaires présents dans les différents spots. À ce titre, cette méthode possède deux hyperparamètres (priors), le premier sur le nombre de cellules par spot attendu, avec une valeur par défaut de 5, ce qui correspond à la valeur attendue pour la technologie Visium, le second prior étant sur la variabilité de détection d'ARN par spot, par défaut à 20 (ce que nous avons également utilisé). La première partie de l'algorithme, pour déterminer la signature des différents types cellulaires, utilise une régression binomiale négative, comme stereoscope. La seconde partie utilise ces signatures pour décomposer les comptages de RNA dans chaque localisation en types du jeu de données de référence, en utilisant l'inférence variationnelle approximative. Il est à noter que comme la publication de cell2location est postérieure aux deux précédents outils cités, ses auteurs peuvent les comparer. Cette comparaison, qui montre une supériorité de cette méthode, est en accord avec les résultats du benchmark publié dans Nature Methods [@li_benchmarking_2022]. 
-
-<!-- whereas Monte Carlo techniques provide a numerical approximation to the exact posterior using a set of samples, variational Bayes provides a locally-optimal, exact analytical solution to an approximation of the posterior.Wikipedia  -->
-
-Grâce à son prior sur le nombre de cellule par spot, cell2location permet d'estimer l'abondance de chaque type cellulaire en plus de leur proportion. En outre, son utilisation de l'accélération GPU permet de raccourcir nettement les temps de calcul, et ainsi d'itérer très rapidement. En effet, pour 30 000 époques sur notre jeu de données, les résultats peuvent être obtenus en moins d'une heure, en utilisant autour de 4GB de VRAM.
+Cette comparaison de quelques-uns des outils de déconvolution avec référence nous a permis de réaliser qu'il semble exister une assez forte variabilité entre les techniques. En particulier, RCTD, stereoscope et cell2location sont différemment sensibles à une répartition des types cellules dans le tissu radicalement différente de celle dans le jeu de données de référence. RCTD en particulier semble assez peu à même de correctement décrire le tissu, en assignant autant de cellules gliales (*"Other"*) dans notre coupe que de neurones du faisceau pyramidal, ce qui est très peu probable. Il est plus difficile de trancher entre stereoscope et cell2location, ces deux outils surmontant cette asymétrie des deux jeux de données. Ils n'obtiennent pas des résultats similaire, comme l'indiquait la heatmap des RMSD, mais en l'absence de connaissance parfaite des cellules constituant la coupe, et du fait qu'ils sont tous deux mis en avant par un des benchmarks consultés ([@li_benchmarking_2022] pour cell2location, [@chen_comprehensive_2022] pour stereoscope), il nous faudra donc trancher selon des critères qui ne sont pas la précision. Stereoscope est un outil relativement complexe à installer (il faut passer par `git clone` puis un script custom installant des dépendances python), extrêmement lent sur CPU avec les options recommandées (un calcul sur le PC de mon collègue Yoann Martin, avec un jeu de données de référence conséquent de 70 000 cellules a duré près de 20 jours). Il a cependant été intégré dans la suite d'outils scvi-tools [@gayosoPythonLibraryProbabilistic2022], ce qui rend son utilisation plus aisée. En outre, après être intervenu sur ce PC et ayant remplacé la carte graphique du PC de Yoann Martin par une GTX 1080 un peu plus apte à réaliser des calculs GPU, nous avons noté un net raccourcissement du temps de calcul, sans toutefois descendre en dessous de la journée complète. Sur notre machine, cell2location réalisait l'estimation de l'abondance des types cellulaires dix fois plus rapidement que stereoscope. En outre, cell2location est bien plus simple à installer, étant disponible sur bioconda, et semble pour le moment nettement plus tenu à jour que stereoscope (dernier commit datant d'un mois plutôt que d'un an), tout en bénéficiant (à nos yeux, et selon [@liComprehensiveBenchmarkingPractical2023]) d'une meilleure documentation. Ce dernier point nous paraît essentiel : d'après notre expérience en bulk RNA-Seq, les outils bénéficiant de la meilleure documentation et du meilleur support ont plus de chances de devenir le standard que des outils plus complexes d'utilisation, quand bien même ceux-ci sont marginalement meilleurs selon des benchmarks (par exemple DESeq2 est la méthode standard d'inférence de l'expression différentielle, bien que certains benchmarks ne le recommande pas du tout [@corcheteSystematicComparisonAssessment2020]). 
 
 
+Lors de l'introduction, nous avons mentionné l'existence de nombreuses autres méthodes de déconvolution. Nous aurions également aimé pouvoir les essayer, en particulier GraphST et CYTOSPACE qui ne figurent dans aucun benchmark, étant très récentes. STdeconvolve, de par son approche originale utilisant une méthode issue du traitement automatique des langues (l'allocation de Dirichlet latente) ne nécessitant pas de jeu de données de référence, aurait été une autre méthode que nous aurions souhaité comparer. Mais des limitations de temps, celles du jeu de données de référence choisi (le mélange des cellules gliales dans *"Other"* rend les clusters de STdeconvolve ardus à comparer à ceux des autres méthodes), et enfin nos propres lacunes en neurobiologie nous ont pour le moment empêché de le faire.
+
+
+Au terme de cette exploration, cell2location nous paraît la méthode idoine à intégrer à la suite d'outils utilisée en transcriptomique spatiale à Genom'IC. Nous avons beaucoup insisté sur les différences entre les outils, mais pour le moment ce type d'analyse repose fortement sur une analyse qualitative et graphique de la répartition des types cellulaires dans la coupe de tissu, et de ce point de vue ci les trois outils produisent des images proches, dont l'analyse n'est pas différente.
 <!-- ###  -->
-
 
 <!-- ## Glossaire -->
 <!-- FFPE :  -->
