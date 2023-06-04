@@ -283,13 +283,19 @@ Lors de l'introduction, nous avons mentionné l'existence de nombreuses autres m
 
 Au terme de cette exploration, cell2location nous paraît la méthode idoine à intégrer à la suite d'outils utilisée en transcriptomique spatiale à Genom'IC, et à appliquer sur le jeu de données de tumeur rares de l'équipe d'Éric Pasmant. Nous avons beaucoup insisté sur les différences entre les outils utilisant une référence, mais pour le moment ce type d'analyse repose fortement sur une analyse qualitative et graphique de la répartition des types cellulaires dans la coupe de tissu, et de ce point de vue ci les trois outils avec référence produisent des images proches, dont l'analyse n'est pas significativement divergente.
 
+\pagebreak
 
-# Glossaire
+# Annexes
+## Glossaire
 - **Single-cell** : Ensemble des technologies de biologie moléculaire opérant à l'échelle de la celllule unique. Ici, nous nous concentrons sur l'analyse du transcriptome en cellule unique.
 - **FFPE** : Méthode de fixation et de conservation d'échantillons (Formol-Fixed Paraffine-Embedded)
 - **MERFISH** : Une des méthodes de transcriptomique spatiale basée sur a fluorescence. elle permet de mesurer un grand nombre d'ARN différents (100 à 10 000).
 - **Barcoding spatial** : Utilisation de sondes poly(d)T comprenant un code unique à un pixel de la lame de transcriptomique spatiale. 
 - **Pixel** : Résolution de la technique de transcriptomique spatiale, il peut s'agir de billes (Slide-Seq) ou de spots (Visium).
 
-# Bibiographie
+
+
+
+## Bibliographie
+ <!-- Helllo        -->
 
