@@ -58,5 +58,16 @@ plt <- vizAllTopics(theta = deconProp,
 
 
 # représentation via seurat
+colnames(deconProp) <- paste("topic.", colnames(deconProp), sep = "")
 visium <- AddMetaData(visium, metadata = deconProp %>% as.data.frame())
 sp_plot <- SpatialFeaturePlot(visium, features = colnames(deconProp))
+
+
+other_model <- ldas$models$`15`
+results_other <- getBetaTheta(other_model, perc.filt = 0.05, betaScale = 1000)
+deconProp_other <- results_other$theta
+deconGexp_other <- results_other$beta
+
+colnames(deconProp_other) <- paste("topic.", colnames(deconProp_other), sep = "")
+visium <- AddMetaData(visium, metadata = deconProp_other %>% as.data.frame())
+sp_plot_other <- SpatialFeaturePlot(visium, features = colnames(deconProp_other))
