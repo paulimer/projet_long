@@ -1,0 +1,164 @@
+#+title: La déconvolution single-cell permet d'améliorer la résolution du Visium
+#+date: \today
+#+author: Paul Etheimer
+#+language: fr
+#+bibliography: ./Projet_long.bib
+#+select_tags: export
+#+exclude_tags: noexport
+#+creator: Emacs 28.2 (Org mode 9.6)
+#+cite_export: biblatex numeric
+#+startup: beamer
+#+latex_compiler: pdflatex
+#+LaTeX_CLASS: beamer
+#+LaTeX_CLASS_OPTIONS: [bigger]
+#+COLUMNS: %40ITEM %10BEAMER_env(Env) %9BEAMER_envargs(Env Args) %4BEAMER_col(Col) %10BEAMER_extra(Extra)
+#+options: H:2 num:2 toc:nil
+#+BEAMER_THEME: [compress]Berlin
+#+BEAMER_COLOR_THEME: seahorse
+#+latex_header:\setbeamertemplate{navigation symbols}{}
+#+latex_header: \setbeamertemplate{page number in head/foot}[framenumber]
+#+latex_header:\setbeamerfont{caption}{size=\scriptsize}
+* Introduction
+
+** Visium
+#+ATTR_LATEX: :width .8\textwidth
+#+CAPTION: La technologie Visium de 10x Genomics déployée sur la plateforme
+[[./10xbarcode.png]]
+
+
+** Résolution limitée
+#+ATTR_LATEX: :width .8\textwidth
+#+CAPTION: La limite résolutive de la technologie Visium [cite:@anderssonSinglecellSpatialTranscriptomics2020]
+[[./melange.png]]
+
+** Problématique et approche
+
+*** Problématique :B_block:BMCOL:
+:PROPERTIES:
+:BEAMER_col: .5
+:BEAMER_env: block
+:END:
+Le choix de la plateforme est-il pertinent (stereoscope [cite:@anderssonSinglecellSpatialTranscriptomics2020]) ?
+#+BEAMER: \pause
+*** Approche :B_block:BMCOL:
+:PROPERTIES:
+:BEAMER_col: .5
+:BEAMER_env: block
+:END:
+Revue bibliographique et essais sur jeu de données publics et de recherche en cours
+
+
+** Déconvolution - concept
+#+ATTR_LATEX: :width .8\textwidth
+#+CAPTION: Base conceptuelle de la déconvolution single-cell
+[[./theory.png]]
+
+** Déconvolution - types de méthodes
+#+ATTR_LATEX: :width .4\textwidth
+#+CAPTION: Classes d'algorithmes utilisés en déconvolution single-cell
+[[./methods.png]]
+
+
+* Matériel et Méthodes
+
+** Plan
+#+BEAMER: \scriptsize
+*** Algorithmes :B_block:BMCOL:
+:PROPERTIES:
+:BEAMER_col: .5
+:BEAMER_env: block
+:END:
+- Stereoscope [cite:@anderssonSinglecellSpatialTranscriptomics2020]
+- RCTD [cite:@cableRobustDecompositionCell2022]
+- Cell2location [cite:@kleshchevnikovCell2locationMapsFinegrained2022]
+- STdeconvolve [cite:@millerReferencefreeCellType2022]
+  
+*** Jeux de données :B_block:BMCOL:
+:PROPERTIES:
+:BEAMER_col: .5
+:BEAMER_env: block
+:END:
+- Public :
+  #+BEAMER: \scriptsize
+  - *Visium* : Coupe du cerveau murin, 10x
+  - *Référence* : Sous ensemble du Allen Brain Map [cite:@yaoTaxonomyTranscriptomicCell2021]
+- Cochin (Équipe Bertherat)
+  #+BEAMER: \scriptsize
+  - *Visium* : Coupe de la glande surrénale
+  - *Référence* : 70k cellules de la glande surrénale
+
+#+BEAMER: \normalsize
+
+** Référence
+#+ATTR_LATEX: :width \textwidth
+#+CAPTION: Types cellulaires du jeu de données de référence et répartition dans l'individu sélectionné
+[[./ref.png]]
+
+
+* Résultats - jeu de données public
+
+** Steroscope
+#+ATTR_LATEX: :width .6\textwidth
+#+CAPTION: Répartition des types cellulaires sur la coupe de tissu, stereoscope
+[[./stereoscope/stereo.png]]
+
+
+** RCTD
+#+ATTR_LATEX: :width .6\textwidth
+#+CAPTION: Répartition des types cellulaires sur la coupe de tissu, RCTD
+[[./rctd/rctd_full.png]]
+
+
+** Cell2location
+#+ATTR_LATEX: :width .6\textwidth
+#+CAPTION: Répartition des types cellulaires sur la coupe de tissu, cell2location
+[[./cell2loc/cell2loc.png]]
+
+** Proportions
+#+ATTR_LATEX: :width \textwidth
+#+CAPTION: Somme des types cellulaires
+[[./prop_tot.png]]
+
+
+
+** STdeconvolve
+#+ATTR_LATEX: :width .6\textwidth
+#+CAPTION: Répartition des types cellulaires sur la coupe de tissu, STdeconvolve (k = 8)
+[[./stdeconvolve/spplot.png]]
+
+
+
+* Résultats - jeu de données glande surrénale
+
+** Annotations, coloration HE
+#+ATTR_LATEX: :width \textwidth
+#+CAPTION: Annotation anatomopathologique de la coupe FFPE
+[[./anapath.png]]
+
+** Proportions
+#+ATTR_LATEX: :width \textwidth
+#+CAPTION: Proportions de types cellulaires (haut : cell2location, bas : stereoscope)
+[[./adr_prop.png]]
+
+
+* Conclusion et perpective
+
+** Choix, poster
+#+ATTR_LATEX: :width .7\textwidth
+#+CAPTION: Poster présenté à l'AGFG
+[[./poster.jpg]]
+
+
+** Utilité
+- Association de types cellulaires
+- Cortico-surrénalome
+
+
+
+**  
+Remerciements : Yoann Martin, Lilia Younsi pour les conseils et le soutien, à Anne Jouinot pour les données et leur analyse (et la carte graphique).
+
+*  
+** Stereoscope
+** Cell2location
+** STdeconvolve
