@@ -18,6 +18,25 @@
 #+latex_header:\setbeamertemplate{navigation symbols}{}
 #+latex_header: \setbeamertemplate{page number in head/foot}[framenumber]
 #+latex_header:\setbeamerfont{caption}{size=\scriptsize}
+
+# TODO :
+# - écrire le speech sur le visium une fois pour toute
+# - typo stereoscope
+# - tout est ffpe donc corriger
+# - question : y en a t il un plus rapide ? Question utile pour les plateformes !
+# - préciser que le single cell est essentiel
+# - citation de Chen et al
+# - subsamplé la référence équipe
+# - couches de neurones bien défini une seule fois
+# - rajouter le k = 15
+# - info en plus de cell2location = abondance
+# - utilité  : insister cortico surrénalome
+# - conclusion
+# - question : bien répondue (un slide pour ça)
+# - corrélation types cellulaire, co expression, cellule cellule interaction (ligand récepteur etc)
+# + nouvelle slide (poster = valorisation)
+# - stdeconvolve en bonus
+
 * Introduction
 
 ** Visium
